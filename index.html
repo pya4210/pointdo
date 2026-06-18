@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#32398E">
+<title>Points d'eau · Metz Parkings</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  :root{
+    --mp:#32398E; --mp-fonce:#23286b; --mp-clair:#eceef8; --mp-vif:#4a52c4;
+    --eau:#1ba3c4; --eau-clair:#e4f5fa;
+    --encre:#1a1c33; --gris:#5e6275; --ligne:#dfe1ee;
+    --fond:#f5f6fb; --blanc:#ffffff; --alerte:#d9434f; --ok:#1d8a4e;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    color:var(--encre);background:var(--fond);
+    display:flex;flex-direction:column;height:100dvh;overflow:hidden;
+  }
+  header{
+    background:linear-gradient(135deg,var(--mp) 0%,var(--mp-vif) 100%);
+    color:#fff;padding:12px 16px;
+    padding-top:calc(12px + env(safe-area-inset-top));
+    display:flex;align-items:center;gap:12px;flex-shrink:0;z-index:1000;
+    box-shadow:0 2px 10px rgba(50,57,142,.25);
+  }
+  .logo-rond{
+    width:38px;height:38px;border-radius:11px;background:rgba(255,255,255,.16);
+    display:flex;align-items:center;justify-content:center;flex-shrink:0;
+    border:1px solid rgba(255,255,255,.25);
+  }
+  header .titre{flex:1}
+  header h1{font-size:1.08rem;font-weight:800;letter-spacing:-.02em;line-height:1.1}
+  header .sub{font-size:.72rem;opacity:.82;font-weight:500;margin-top:1px}
+  .info-btn{
+    width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,.4);
+    background:rgba(255,255,255,.12);color:#fff;font-size:.95rem;font-weight:700;
+    cursor:pointer;flex-shrink:0;font-family:Georgia,serif;font-style:italic;
+  }
+  .info-btn:active{background:rgba(255,255,255,.25)}
+  #map{flex:1;width:100%;background:#d6dbf0}
+  #panneau{
+    flex-shrink:0;background:var(--blanc);
+    border-top:1px solid var(--ligne);border-radius:18px 18px 0 0;margin-top:-14px;
+    position:relative;z-index:500;
+    padding:16px 16px calc(14px + env(safe-area-inset-bottom));
+    box-shadow:0 -4px 20px rgba(35,40,107,.08);
+  }
+  .poignee{width:38px;height:4px;border-radius:2px;background:var(--ligne);margin:0 auto 12px}
+  #etat{font-size:.9rem;color:var(--gris);text-align:center;padding:4px 0 12px;line-height:1.4}
+  #carte-proche{display:none}
+  #carte-proche.actif{display:block;animation:apparait .28s cubic-bezier(.2,.7,.3,1)}
+  @keyframes apparait{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  .proche-carte{
+    background:var(--mp-clair);border-radius:14px;padding:14px 16px;margin-bottom:14px;
+    border:1px solid #e0e3f3;
+  }
+  .proche-haut{display:flex;align-items:baseline;gap:10px;margin-bottom:3px}
+  .proche-dist{font-size:2.3rem;font-weight:800;color:var(--mp);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .proche-dir{font-size:.95rem;font-weight:700;color:var(--mp-vif)}
+  .proche-nom{font-size:.92rem;color:var(--encre);font-weight:600}
+  .proche-nom span{color:var(--gris);font-weight:400}
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .btn{
+    border:none;border-radius:13px;padding:14px 10px;font-size:1rem;font-weight:700;
+    font-family:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;
+    gap:8px;text-decoration:none;transition:transform .08s,filter .15s;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn-principal{background:var(--mp);color:#fff;box-shadow:0 3px 10px rgba(50,57,142,.28)}
+  .btn-principal:active{filter:brightness(.93)}
+  .btn-second{background:var(--mp-clair);color:var(--mp-fonce)}
+  #localiser{
+    width:100%;background:var(--mp);color:#fff;border:none;border-radius:14px;
+    padding:16px;font-size:1.06rem;font-weight:800;font-family:inherit;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:9px;letter-spacing:-.01em;
+    box-shadow:0 4px 14px rgba(50,57,142,.3);
+  }
+  #localiser:active{filter:brightness(.93);transform:scale(.99)}
+  #localiser.recherche{background:var(--gris);box-shadow:none}
+  .pulse{width:9px;height:9px;border-radius:50%;background:#fff;animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+  .leaflet-popup-content-wrapper{border-radius:12px}
+  .leaflet-popup-content{font-family:inherit;font-size:.9rem;margin:11px 13px}
+  .leaflet-popup-content b{color:var(--mp)}
+  .pop-lien{display:inline-block;margin-top:7px;color:var(--mp-vif);font-weight:700;text-decoration:none}
+  .goutte{
+    width:28px;height:28px;border-radius:50% 50% 50% 0;background:var(--eau);
+    transform:rotate(-45deg);border:2.5px solid #fff;box-shadow:0 2px 6px rgba(0,0,0,.3);
+  }
+  .goutte.proche{background:var(--alerte);width:34px;height:34px}
+  .moi{width:18px;height:18px;border-radius:50%;background:var(--mp-vif);border:3px solid #fff;box-shadow:0 0 0 3px rgba(74,82,196,.3),0 1px 4px rgba(0,0,0,.3)}
+  .err{color:var(--alerte);font-weight:600}
+  .compte{font-size:.7rem;color:var(--gris);text-align:center;padding-top:12px;opacity:.85}
+  .compte b{color:var(--mp)}
+  #voile{
+    display:none;position:fixed;inset:0;background:rgba(26,28,51,.5);z-index:2000;
+    align-items:flex-end;
+  }
+  #voile.actif{display:flex;animation:fade .2s ease}
+  @keyframes fade{from{opacity:0}to{opacity:1}}
+  #info-panneau{
+    background:#fff;width:100%;border-radius:20px 20px 0 0;
+    padding:20px 20px calc(20px + env(safe-area-inset-bottom));
+    max-height:82vh;overflow-y:auto;animation:remonte .28s cubic-bezier(.2,.7,.3,1);
+  }
+  @keyframes remonte{from{transform:translateY(100%)}to{transform:none}}
+  #info-panneau h2{font-size:1.15rem;font-weight:800;color:var(--mp);margin-bottom:4px;letter-spacing:-.01em}
+  #info-panneau .maj{font-size:.72rem;color:var(--gris);margin-bottom:16px}
+  #info-panneau h3{font-size:.9rem;font-weight:700;color:var(--encre);margin:16px 0 6px;display:flex;align-items:center;gap:7px}
+  #info-panneau h3 .ico{color:var(--ok);font-weight:800}
+  #info-panneau p{font-size:.88rem;color:#3a3d52;line-height:1.55;margin-bottom:4px}
+  #info-panneau .encadre{background:var(--mp-clair);border-radius:12px;padding:13px 15px;margin:14px 0;font-size:.85rem;line-height:1.5;color:var(--mp-fonce)}
+  #info-panneau .fermer{
+    width:100%;margin-top:18px;background:var(--mp);color:#fff;border:none;border-radius:13px;
+    padding:14px;font-size:1rem;font-weight:700;font-family:inherit;cursor:pointer;
+  }
+  #info-panneau .fermer:active{filter:brightness(.93)}
+  .src{font-size:.72rem;color:var(--gris);text-align:center;padding-top:10px}
+  .src a{color:var(--mp-vif)}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo-rond">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2.5C12 2.5 5 10 5 14.5C5 18.5 8.1 21.5 12 21.5C15.9 21.5 19 18.5 19 14.5C19 10 12 2.5 12 2.5Z" fill="#fff"/></svg>
+  </div>
+  <div class="titre">
+    <h1>Points d'eau — Metz</h1>
+    <div class="sub">Metz Parkings · fontaines d'eau potable</div>
+  </div>
+  <button class="info-btn" onclick="ouvrirInfo()" aria-label="Confidentialité et informations">i</button>
+</header>
+
+<div id="map"></div>
+
+<div id="panneau">
+  <div class="poignee"></div>
+  <div id="etat">Chargement des fontaines…</div>
+  <button id="localiser" style="display:none" onclick="localiser()">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    Trouver l'eau la plus proche
+  </button>
+
+  <div id="carte-proche">
+    <div class="proche-carte">
+      <div class="proche-haut">
+        <span class="proche-dist" id="dist">—</span>
+        <span class="proche-dir" id="dir"></span>
+      </div>
+      <div class="proche-nom" id="nom"></div>
+    </div>
+    <div class="actions">
+      <a class="btn btn-principal" id="itineraire" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"><path d="M9 20l-5.5 2.5L3 4l6-2.5 6 2.5 6-2.5-.5 18.5L15 20l-6-2.5z"/><path d="M9 1.5V20M15 4v18.5"/></svg>
+        Itinéraire
+      </a>
+      <button class="btn btn-second" onclick="recentrer()">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#23286b" stroke-width="2.2" stroke-linecap="round"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>
+        Voir sur carte
+      </button>
+    </div>
+    <div class="compte" id="compte"></div>
+  </div>
+</div>
+
+<div id="voile" onclick="if(event.target===this)fermerInfo()">
+  <div id="info-panneau">
+    <h2>Confidentialité &amp; informations</h2>
+    <div class="maj">Application interne · usage professionnel</div>
+
+    <div class="encadre">
+      Cette application <b>ne collecte, n'enregistre et ne transmet aucune donnée personnelle</b>. Votre position n'est utilisée que sur votre appareil, le temps d'afficher la fontaine la plus proche.
+    </div>
+
+    <h3><span class="ico">&#10003;</span> Aucune donnée collectée</h3>
+    <p>Nous ne créons aucun compte, ne demandons aucune information vous concernant et ne déposons aucun traceur ni cookie publicitaire.</p>
+
+    <h3><span class="ico">&#10003;</span> Votre position reste sur votre téléphone</h3>
+    <p>Quand vous appuyez sur « Trouver l'eau la plus proche », votre téléphone calcule la distance localement. Votre position n'est envoyée à aucun serveur, n'est pas enregistrée et disparaît dès que vous fermez la page.</p>
+
+    <h3><span class="ico">&#10003;</span> Aucun suivi, aucune statistique</h3>
+    <p>L'application ne mesure pas qui l'utilise, ni quand, ni où. Aucun historique de déplacement n'est constitué.</p>
+
+    <h3><span class="ico">&#10003;</span> Vous gardez le contrôle</h3>
+    <p>La géolocalisation ne s'active qu'avec votre accord explicite, demandé par votre navigateur. Vous pouvez la refuser à tout moment.</p>
+
+    <h3>Comment ça fonctionne</h3>
+    <p>Pour afficher la carte et la liste des fontaines, l'application contacte uniquement les services cartographiques OpenStreetMap. Aucune information vous concernant ne leur est transmise.</p>
+
+    <div class="src">
+      Données des fontaines : <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap</a><br>
+      Fond de carte © OpenStreetMap
+    </div>
+
+    <button class="fermer" onclick="fermerInfo()">J'ai compris</button>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ============================================================
+   LISTE OFFICIELLE DES FONTAINES (a completer plus tard)
+   ------------------------------------------------------------
+   Quand vous obtiendrez la liste officielle de la Ville /
+   Metz Parkings, ajoutez ici chaque fontaine sous la forme :
+        {lat:49.1193, lon:6.1757, nom:"Place Saint-Louis"},
+   Ces points s'ajoutent a ceux d'OpenStreetMap (les doublons
+   tres proches sont automatiquement fusionnes).
+   Laissez le tableau vide [] si vous n'avez pas encore la liste.
+   ============================================================ */
+const FONTAINES_OFFICIELLES = [
+  // {lat:49.0000, lon:6.0000, nom:"Exemple a remplacer"},
+];
+
+const CENTRE=[49.1193,6.1757];
+let map, fontaines=[], coucheFontaines, marqueurMoi, marqueurProche, fontaineProche;
+
+map=L.map('map',{zoomControl:false}).setView(CENTRE,14);
+L.control.zoom({position:'topright'}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  maxZoom:19, attribution:'© OpenStreetMap'
+}).addTo(map);
+
+const iconeEau=L.divIcon({className:'',html:'<div class="goutte"></div>',iconSize:[28,28],iconAnchor:[14,26]});
+const iconeProche=L.divIcon({className:'',html:'<div class="goutte proche"></div>',iconSize:[34,34],iconAnchor:[17,32]});
+const iconeMoi=L.divIcon({className:'',html:'<div class="moi"></div>',iconSize:[18,18],iconAnchor:[9,9]});
+
+function setEtat(txt,err){const e=document.getElementById('etat');e.style.display='block';e.innerHTML=txt;e.className=err?'err':'';}
+function ouvrirInfo(){document.getElementById('voile').classList.add('actif')}
+function fermerInfo(){document.getElementById('voile').classList.remove('actif')}
+
+const REQUETE=`[out:json][timeout:30];
+(
+  area["name"="Metz"]["admin_level"="8"];
+  area["name"="Eurométropole de Metz"]["admin_level"="7"];
+)->.a;
+(
+  node["amenity"="drinking_water"](area.a);
+  node["amenity"="fountain"]["drinking_water"!="no"](area.a);
+  node["man_made"="water_tap"]["drinking_water"!="no"](area.a);
+  node["man_made"="drinking_fountain"](area.a);
+  node["amenity"="water_point"](area.a);
+);
+out body;`;
+const SERVEURS=[
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+  'https://maps.mail.ru/osm/tools/overpass/api/interpreter'
+];
+
+async function chargerOSM(){
+  for(const url of SERVEURS){
+    try{
+      const r=await fetch(url,{method:'POST',body:'data='+encodeURIComponent(REQUETE)});
+      if(!r.ok) continue;
+      const j=await r.json();
+      const pts=j.elements.filter(e=>e.lat&&e.lon).map(e=>({
+        lat:e.lat, lon:e.lon,
+        nom:(e.tags&&(e.tags.name||e.tags.description))||"Fontaine d'eau potable"
+      }));
+      if(pts.length){return pts;}
+    }catch(e){}
+  }
+  return [];
+}
+
+function fusionner(a,b){
+  const out=a.slice();
+  b.forEach(p=>{
+    const dup=out.some(q=>distance(p.lat,p.lon,q.lat,q.lon)<25);
+    if(!dup) out.push(p);
+  });
+  return out;
+}
+
+function afficherFontaines(){
+  if(coucheFontaines) coucheFontaines.remove();
+  coucheFontaines=L.layerGroup();
+  fontaines.forEach(f=>{
+    L.marker([f.lat,f.lon],{icon:iconeEau})
+      .bindPopup('<b>'+f.nom+'</b><br><a class="pop-lien" href="https://www.google.com/maps/dir/?api=1&destination='+f.lat+','+f.lon+'&travelmode=walking" target="_blank" rel="noopener">&#9656; Y aller &agrave; pied</a>')
+      .addTo(coucheFontaines);
+  });
+  coucheFontaines.addTo(map);
+}
+
+function distance(a,b,c,d){
+  const R=6371000,r=Math.PI/180;
+  const dphi=(c-a)*r,dl=(d-b)*r;
+  const x=Math.sin(dphi/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(dl/2)**2;
+  return 2*R*Math.asin(Math.sqrt(x));
+}
+function cap(a,b,c,d){
+  const r=Math.PI/180,y=Math.sin((d-b)*r)*Math.cos(c*r);
+  const x=Math.cos(a*r)*Math.sin(c*r)-Math.sin(a*r)*Math.cos(c*r)*Math.cos((d-b)*r);
+  let deg=(Math.atan2(y,x)/r+360)%360;
+  const dirs=['Nord','Nord-Est','Est','Sud-Est','Sud','Sud-Ouest','Ouest','Nord-Ouest'];
+  return dirs[Math.round(deg/45)%8];
+}
+function fmtDist(m){return m<1000?Math.round(m/5)*5+' m':(m/1000).toFixed(1).replace('.',',')+' km';}
+
+function localiser(){
+  if(!fontaines.length){setEtat('Fontaines non charg&eacute;es. V&eacute;rifiez la connexion.',true);return;}
+  const b=document.getElementById('localiser');
+  b.classList.add('recherche');
+  b.innerHTML='<span class="pulse"></span> Localisation en cours&hellip;';
+  if(!navigator.geolocation){setEtat('G&eacute;olocalisation non disponible sur cet appareil.',true);resetBtn();return;}
+  navigator.geolocation.getCurrentPosition(pos=>{
+    const la=pos.coords.latitude, lo=pos.coords.longitude;
+    if(marqueurMoi) marqueurMoi.remove();
+    marqueurMoi=L.marker([la,lo],{icon:iconeMoi,zIndexOffset:1000}).addTo(map);
+    let min=Infinity,best=null;
+    fontaines.forEach(f=>{const dd=distance(la,lo,f.lat,f.lon);if(dd<min){min=dd;best=f;}});
+    fontaineProche=best;
+    document.getElementById('dist').textContent=fmtDist(min);
+    document.getElementById('dir').textContent='vers le '+cap(la,lo,best.lat,best.lon);
+    document.getElementById('nom').innerHTML=best.nom+' <span>&middot; point le plus proche</span>';
+    document.getElementById('itineraire').href='https://www.google.com/maps/dir/?api=1&destination='+best.lat+','+best.lon+'&travelmode=walking';
+    document.getElementById('compte').innerHTML='<b>'+fontaines.length+'</b> fontaines recens&eacute;es';
+    document.getElementById('carte-proche').classList.add('actif');
+    if(marqueurProche) marqueurProche.remove();
+    marqueurProche=L.marker([best.lat,best.lon],{icon:iconeProche,zIndexOffset:900})
+      .bindPopup('<b>'+best.nom+'</b><br>Le plus proche de vous').addTo(map);
+    map.fitBounds(L.latLngBounds([[la,lo],[best.lat,best.lon]]),{padding:[60,60],maxZoom:17});
+    document.getElementById('etat').style.display='none';
+    resetBtn();
+  },err=>{
+    let m='Position introuvable.';
+    if(err.code===1) m='Acc&egrave;s &agrave; la position refus&eacute;. Autorisez la localisation.';
+    if(err.code===3) m='D&eacute;lai d&eacute;pass&eacute;. R&eacute;essayez &agrave; d&eacute;couvert.';
+    setEtat(m,true);resetBtn();
+  },{enableHighAccuracy:true,timeout:12000,maximumAge:5000});
+}
+function resetBtn(){
+  const b=document.getElementById('localiser');b.classList.remove('recherche');
+  b.innerHTML='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg> Trouver l\'eau la plus proche';
+}
+function recentrer(){
+  if(fontaineProche){map.setView([fontaineProche.lat,fontaineProche.lon],17);
+    if(marqueurProche)marqueurProche.openPopup();}
+}
+
+(async function(){
+  const osm=await chargerOSM();
+  fontaines=fusionner(FONTAINES_OFFICIELLES, osm);
+  if(fontaines.length){
+    afficherFontaines();
+    setEtat('Appuyez sur le bouton pour situer la fontaine la plus proche.');
+    document.getElementById('localiser').style.display='flex';
+  }else{
+    setEtat('Impossible de charger les fontaines (hors-ligne ?). Reconnectez-vous puis rechargez la page.',true);
+  }
+})();
+</script>
+</body>
+</html>
